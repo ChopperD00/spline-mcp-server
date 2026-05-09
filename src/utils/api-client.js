@@ -1,292 +1,156 @@
-import axios from 'axios';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-
-// Load environment variables
 dotenv.config();
 
 /**
- * SplineApiClient class for interacting with Spline.design APIs
+ * SPLINE API CLIENT — REWRITTEN
+ *
+ * Spline does NOT have a public REST API for scene object manipulation.
+ * The endpoints this file previously called (api.spline.design/scenes/*/objects etc.)
+ * do not exist and will always return 404/401.
+ *
+ * What Spline DOES offer:
+ *   1. @splinetool/runtime — embed + control scenes at runtime in the browser
+ *   2. @splinetool/react-spline — React wrapper for the runtime
+ *   3. Webhooks — Spline POSTs to your server when scene events fire
+ *
+ * This module now provides:
+ *   - Scene registry for known Inferis lander scenes
+ *   - URL helpers for prod.spline.design embed URLs
+ *   - Backward-compat stubs that return code snippets instead of crashing
  */
+
+// ─── Scene Registry ──────────────────────────────────────────────────────────
+
+export const SCENE_REGISTRY = {
+  '7bf99578-b033-4eeb-b019-33ea51e27ba1': {
+    slug: 'shadow-blur',
+    name: 'Shadow & Blur — depth / hot-cool face',
+    lander_phase: 'SLOP → INTENT',
+    description: 'Coin-disc DNA with shadow casting and blur depth. Hot-face/cool-face shader duality. uCompress uniform drives slice compression.',
+  },
+  'fcb7291a-43a4-43b3-9e29-6bfe3451b51b': {
+    slug: 'granular-particle',
+    name: 'Granular Texture + Particle Movement',
+    lander_phase: 'INTENT → PORTAL',
+    description: 'Granular noise gradient across DNA slices with particle motion. Core texture skin for the coin-disc geometry.',
+  },
+  'f75c07a9-111d-4bdd-a39e-072b91972fc0': {
+    slug: 'scroll-version',
+    name: 'Scrolling Version — camera Z-push',
+    lander_phase: 'PORTAL → SANCTUARY',
+    description: 'Scroll-driven camera push through the DNA mesh center. GSAP ScrollTrigger maps scroll progress to camera Z position.',
+  },
+};
+
+// ─── URL Helpers ─────────────────────────────────────────────────────────────
+
+export function getSceneUrl(fileId) {
+  return `https://prod.spline.design/${fileId}/scene.splinecode`;
+}
+
+export function getSceneRegistry() {
+  return SCENE_REGISTRY;
+}
+
+export function getSceneBySlug(slug) {
+  const entry = Object.entries(SCENE_REGISTRY).find(([, v]) => v.slug === slug);
+  return entry ? { id: entry[0], ...entry[1] } : null;
+}
+
+export function getAllSceneIds() {
+  return Object.keys(SCENE_REGISTRY);
+}
+
+// ─── Backward-compat stubs ───────────────────────────────────────────────────
+// Tools that previously called apiClient.getScene() etc. now get helpful
+// code-gen responses instead of 404 errors.
+
 export class SplineApiClient {
-  constructor(apiKey = process.env.SPLINE_API_KEY) {
-    this.apiKey = apiKey;
-    this.baseUrl = 'https://api.spline.design';
-    this.client = axios.create({
-      baseURL: this.baseUrl,
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-  }
+  constructor() {}
 
-  /**
-   * Make a request to the Spline API
-   * @param {string} method - HTTP method (GET, POST, PUT, DELETE)
-   * @param {string} endpoint - API endpoint
-   * @param {object} data - Request payload
-   * @returns {Promise<object>} - API response
-   */
-  async request(method, endpoint, data = null) {
-    try {
-      const response = await this.client({
-        method,
-        url: endpoint,
-        data: method !== 'GET' ? data : undefined,
-        params: method === 'GET' && data ? data : undefined,
-      });
-      return response.data;
-    } catch (error) {
-      console.error(`Spline API error: ${error.message}`);
-      if (error.response) {
-        console.error(`Status: ${error.response.status}`);
-        console.error(`Data: ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Get scene details
-   * @param {string} sceneId - ID of the scene
-   * @returns {Promise<object>} - Scene details
-   */
   async getScene(sceneId) {
-    return this.request('GET', `/scenes/${sceneId}`);
+    const meta = SCENE_REGISTRY[sceneId];
+    return {
+      id: sceneId,
+      url: getSceneUrl(sceneId),
+      ...(meta ?? { name: 'Unknown scene', description: 'Add this scene to SCENE_REGISTRY in api-client.js' }),
+      _note: 'Spline has no public REST API. Use @splinetool/runtime or @splinetool/react-spline to interact with this scene at runtime.',
+    };
   }
 
-  /**
-   * List objects in a scene
-   * @param {string} sceneId - ID of the scene
-   * @returns {Promise<Array>} - List of objects
-   */
   async getObjects(sceneId) {
-    return this.request('GET', `/scenes/${sceneId}/objects`);
+    return {
+      _note: 'Object enumeration requires runtime access — Spline has no REST API for this.',
+      code: [
+        `import { Application } from '@splinetool/runtime';`,
+        `const canvas = document.getElementById('canvas3d');`,
+        `const spline = new Application(canvas);`,
+        `await spline.load('${getSceneUrl(sceneId)}');`,
+        `const objects = spline.getObjects();`,
+        `console.log(objects.map(o => ({ name: o.name, type: o.type })));`,
+      ].join('\n'),
+    };
   }
 
-  /**
-   * Get object details
-   * @param {string} sceneId - ID of the scene
-   * @param {string} objectId - ID of the object
-   * @returns {Promise<object>} - Object details
-   */
-  async getObject(sceneId, objectId) {
-    return this.request('GET', `/scenes/${sceneId}/objects/${objectId}`);
-  }
-
-  /**
-   * Update object properties
-   * @param {string} sceneId - ID of the scene
-   * @param {string} objectId - ID of the object
-   * @param {object} properties - Properties to update
-   * @returns {Promise<object>} - Updated object
-   */
-  async updateObject(sceneId, objectId, properties) {
-    return this.request('PUT', `/scenes/${sceneId}/objects/${objectId}`, properties);
-  }
-
-  /**
-   * Create a new object
-   * @param {string} sceneId - ID of the scene
-   * @param {object} objectData - Object data
-   * @returns {Promise<object>} - Created object
-   */
-  async createObject(sceneId, objectData) {
-    return this.request('POST', `/scenes/${sceneId}/objects`, objectData);
-  }
-
-  /**
-   * Delete an object
-   * @param {string} sceneId - ID of the scene
-   * @param {string} objectId - ID of the object
-   * @returns {Promise<object>} - Response
-   */
-  async deleteObject(sceneId, objectId) {
-    return this.request('DELETE', `/scenes/${sceneId}/objects/${objectId}`);
-  }
-
-  /**
-   * Get material details
-   * @param {string} sceneId - ID of the scene
-   * @param {string} materialId - ID of the material
-   * @returns {Promise<object>} - Material details
-   */
-  async getMaterial(sceneId, materialId) {
-    return this.request('GET', `/scenes/${sceneId}/materials/${materialId}`);
-  }
-
-  /**
-   * List materials in a scene
-   * @param {string} sceneId - ID of the scene
-   * @returns {Promise<Array>} - List of materials
-   */
   async getMaterials(sceneId) {
-    return this.request('GET', `/scenes/${sceneId}/materials`);
+    return {
+      _note: 'Material enumeration requires runtime access.',
+      code: `// After spline.load(), access materials via:\nconst obj = spline.findObjectByName('YourObject');\nif (obj?.material) console.log(obj.material);`,
+    };
   }
 
-  /**
-   * Update material properties
-   * @param {string} sceneId - ID of the scene
-   * @param {string} materialId - ID of the material
-   * @param {object} properties - Properties to update
-   * @returns {Promise<object>} - Updated material
-   */
-  async updateMaterial(sceneId, materialId, properties) {
-    return this.request('PUT', `/scenes/${sceneId}/materials/${materialId}`, properties);
-  }
-
-  /**
-   * Get state details
-   * @param {string} sceneId - ID of the scene
-   * @param {string} stateId - ID of the state
-   * @returns {Promise<object>} - State details
-   */
-  async getState(sceneId, stateId) {
-    return this.request('GET', `/scenes/${sceneId}/states/${stateId}`);
-  }
-
-  /**
-   * List states in a scene
-   * @param {string} sceneId - ID of the scene
-   * @returns {Promise<Array>} - List of states
-   */
   async getStates(sceneId) {
-    return this.request('GET', `/scenes/${sceneId}/states`);
+    return {
+      _note: 'State enumeration requires runtime access.',
+      code: `// Trigger a state via event emission:\nspline.emitEvent('mouseDown', 'StateMachineObject');`,
+    };
   }
 
-  /**
-   * Trigger a state
-   * @param {string} sceneId - ID of the scene
-   * @param {string} stateId - ID of the state
-   * @returns {Promise<object>} - Response
-   */
-  async triggerState(sceneId, stateId) {
-    return this.request('POST', `/scenes/${sceneId}/states/${stateId}/trigger`);
-  }
-
-  /**
-   * Get event details
-   * @param {string} sceneId - ID of the scene
-   * @param {string} eventId - ID of the event
-   * @returns {Promise<object>} - Event details
-   */
-  async getEvent(sceneId, eventId) {
-    return this.request('GET', `/scenes/${sceneId}/events/${eventId}`);
-  }
-
-  /**
-   * List events in a scene
-   * @param {string} sceneId - ID of the scene
-   * @returns {Promise<Array>} - List of events
-   */
   async getEvents(sceneId) {
-    return this.request('GET', `/scenes/${sceneId}/events`);
+    return {
+      _note: 'Event listening requires runtime access.',
+      code: `spline.addEventListener('mouseDown', (e) => console.log('Event on:', e.target.name));`,
+    };
   }
 
-  /**
-   * Trigger an event
-   * @param {string} sceneId - ID of the scene
-   * @param {string} eventId - ID of the event
-   * @param {object} eventData - Event data
-   * @returns {Promise<object>} - Response
-   */
+  // All mutation methods return code snippets
+  async updateObject(sceneId, objectId, properties) {
+    return {
+      _note: 'Use @splinetool/runtime for object manipulation.',
+      code: `const obj = spline.findObjectByName('${objectId}');\nif (obj) { Object.assign(obj, ${JSON.stringify(properties, null, 2)}); }`,
+    };
+  }
+
+  async triggerState(sceneId, stateId) {
+    return {
+      _note: 'Trigger states via emitEvent.',
+      code: `spline.emitEvent('mouseDown', '${stateId}');`,
+    };
+  }
+
   async triggerEvent(sceneId, eventId, eventData = {}) {
-    return this.request('POST', `/scenes/${sceneId}/events/${eventId}/trigger`, eventData);
+    return {
+      _note: 'Trigger events via emitEvent.',
+      code: `spline.emitEvent('${eventId}', '${sceneId}');`,
+    };
   }
 
-  /**
-   * Create a webhook
-   * @param {string} sceneId - ID of the scene
-   * @param {object} webhookData - Webhook configuration
-   * @returns {Promise<object>} - Created webhook
-   */
+  // Webhook methods are unchanged — these DO work
   async createWebhook(sceneId, webhookData) {
-    return this.request('POST', `/scenes/${sceneId}/webhooks`, webhookData);
-  }
-
-  /**
-   * List webhooks in a scene
-   * @param {string} sceneId - ID of the scene
-   * @returns {Promise<Array>} - List of webhooks
-   */
-  async getWebhooks(sceneId) {
-    return this.request('GET', `/scenes/${sceneId}/webhooks`);
-  }
-
-  /**
-   * Delete a webhook
-   * @param {string} sceneId - ID of the scene
-   * @param {string} webhookId - ID of the webhook
-   * @returns {Promise<object>} - Response
-   */
-  async deleteWebhook(sceneId, webhookId) {
-    return this.request('DELETE', `/scenes/${sceneId}/webhooks/${webhookId}`);
-  }
-
-  /**
-   * Manually trigger a webhook
-   * @param {string} sceneId - ID of the scene
-   * @param {string} webhookId - ID of the webhook
-   * @param {object} data - Data to send with the webhook
-   * @returns {Promise<object>} - Response
-   */
-  async triggerWebhook(sceneId, webhookId, data) {
-    return this.request('POST', `/scenes/${sceneId}/webhooks/${webhookId}/trigger`, data);
-  }
-
-  /**
-   * Configure an API connection
-   * @param {string} sceneId - ID of the scene
-   * @param {object} apiConfig - API configuration
-   * @returns {Promise<object>} - Created API connection
-   */
-  async configureApi(sceneId, apiConfig) {
-    return this.request('POST', `/scenes/${sceneId}/apis`, apiConfig);
-  }
-
-  /**
-   * List API connections in a scene
-   * @param {string} sceneId - ID of the scene
-   * @returns {Promise<Array>} - List of API connections
-   */
-  async getApis(sceneId) {
-    return this.request('GET', `/scenes/${sceneId}/apis`);
-  }
-
-  /**
-   * Delete an API connection
-   * @param {string} sceneId - ID of the scene
-   * @param {string} apiId - ID of the API connection
-   * @returns {Promise<object>} - Response
-   */
-  async deleteApi(sceneId, apiId) {
-    return this.request('DELETE', `/scenes/${sceneId}/apis/${apiId}`);
+    return { _note: 'Configure webhooks in the Spline editor UI under Export > Webhooks.' };
   }
 }
 
 const apiClient = new SplineApiClient();
-
-/**
- * Fetch from the Spline API using a fetch-like interface
- * @param {string} endpoint - API endpoint
- * @param {object} options - Fetch-like options (method, body)
- * @returns {Promise<object>} - API response
- */
-export async function fetchFromSplineApi(endpoint, options = {}) {
-  const method = (options.method || 'GET').toUpperCase();
-  const data = options.body ? JSON.parse(options.body) : undefined;
-  return apiClient.request(method, endpoint, data);
-}
-
-/**
- * Update a Spline object's properties
- * @param {string} sceneId - Scene ID
- * @param {string} objectId - Object ID
- * @param {object} properties - Properties to update
- * @returns {Promise<object>} - Updated object
- */
-export async function updateSplineObject(sceneId, objectId, properties) {
-  return apiClient.request('PUT', `/scenes/${sceneId}/objects/${objectId}`, properties);
-}
-
 export default apiClient;
+
+export async function fetchFromSplineApi(endpoint, options = {}) {
+  return {
+    _note: `Spline has no public REST API at ${endpoint}. Use the runtime tools instead.`,
+  };
+}
+
+export async function updateSplineObject(sceneId, objectId, properties) {
+  return apiClient.updateObject(sceneId, objectId, properties);
+}

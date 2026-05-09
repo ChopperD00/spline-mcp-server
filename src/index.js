@@ -7,193 +7,139 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Get the directory name in ESM
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname  = path.dirname(__filename);
 
-// Import tool registrations
-import { registerObjectTools } from './tools/object-tools.js';
-import { registerMaterialTools } from './tools/material-tools.js';
-import { registerStateEventTools } from './tools/state-event-tools.js';
-import { registerApiWebhookTools } from './tools/api-webhook-tools.js';
-import { registerSceneTools } from './tools/scene-tools.js';
-import { registerActionTools } from './tools/action-tools.js';
-import { registerCompleteEventTools } from './tools/complete-event-tools.js';
+// Tool registrations
+import { registerObjectTools }           from './tools/object-tools.js';
+import { registerMaterialTools }         from './tools/material-tools.js';
+import { registerStateEventTools }       from './tools/state-event-tools.js';
+import { registerApiWebhookTools }       from './tools/api-webhook-tools.js';
+import { registerSceneTools }            from './tools/scene-tools.js';
+import { registerActionTools }           from './tools/action-tools.js';
+import { registerCompleteEventTools }    from './tools/complete-event-tools.js';
 import { registerAdvancedMaterialTools } from './tools/advanced-material-tools.js';
-import { registerLightingCameraTools } from './tools/lighting-camera-tools.js';
-import { registerDesignTools } from './tools/design-tools.js';
-import { registerRuntimeTools } from './tools/runtime-tools.js';
+import { registerLightingCameraTools }   from './tools/lighting-camera-tools.js';
+import { registerDesignTools }           from './tools/design-tools.js';
+import { registerRuntimeTools }          from './tools/runtime-tools.js';
+import { registerLanderTools }           from './tools/lander-tools.js';
 
-// Import resource registrations
-import { registerSceneResources } from './resources/scene-resources.js';
-import { registerMaterialResources } from './resources/material-resources.js';
+// Resource registrations
+import { registerSceneResources }      from './resources/scene-resources.js';
+import { registerMaterialResources }   from './resources/material-resources.js';
 import { registerStateEventResources } from './resources/state-event-resources.js';
 
-// Import prompt registrations
-import { registerCreationPrompts } from './prompts/creation-prompts.js';
+// Prompt registrations
+import { registerCreationPrompts }  from './prompts/creation-prompts.js';
 import { registerAnimationPrompts } from './prompts/animation-prompts.js';
-import { registerRuntimePrompts } from './prompts/runtime-prompts.js';
+import { registerRuntimePrompts }   from './prompts/runtime-prompts.js';
 
-/**
- * Main function to start the MCP server
- * @param {Object} options - Server configuration options
- */
 async function main(options = {}) {
-  // Note: console.log statements are commented out to avoid interfering with stdio transport
-  // console.log('Starting Spline.design MCP Server...');
-
-  // Load environment variables if config file is specified
+  // Load env
   try {
+    const envPath        = path.resolve(process.cwd(), '.env');
+    const projectEnvPath = path.resolve(__dirname, '../.env');
     if (options.config) {
-      const configPath = path.resolve(options.config);
-      // console.log(`Loading configuration from: ${configPath}`);
-      dotenv.config({ path: configPath });
+      dotenv.config({ path: path.resolve(options.config) });
+    } else if (fs.existsSync(envPath)) {
+      dotenv.config({ path: envPath });
+    } else if (fs.existsSync(projectEnvPath)) {
+      dotenv.config({ path: projectEnvPath });
     } else {
-      // Try to load from default locations
-      const envPath = path.resolve(process.cwd(), '.env');
-      const projectEnvPath = path.resolve(__dirname, '../.env');
-
-      if (fs.existsSync(envPath)) {
-        // console.log(`Loading configuration from: ${envPath}`);
-        dotenv.config({ path: envPath });
-      } else if (fs.existsSync(projectEnvPath)) {
-        // console.log(`Loading configuration from: ${projectEnvPath}`);
-        dotenv.config({ path: projectEnvPath });
-      } else {
-        // console.log('No .env file found, using environment variables only');
-        dotenv.config();
-      }
+      dotenv.config();
     }
-  } catch (error) {
-    // console.warn(`Warning: Error loading configuration: ${error.message}`);
-    // console.log('Continuing with environment variables only...');
-  }
+  } catch (_) {}
 
-  // Validate API key
-  if (!process.env.SPLINE_API_KEY && options.verbose) {
-    // console.warn('\x1b[33m%s\x1b[0m', 'Warning: SPLINE_API_KEY is not set. API calls may fail.');
-  }
-
-  // Create a new MCP server instance
   const server = new McpServer({
     name: 'Spline.design MCP Server',
-    version: '1.0.0',
-    description: 'Control Spline.design 3D scenes, materials, states, and events'
+    version: '2.0.0',
+    description: 'Spline runtime code generation + Inferis lander tools. Includes 5 lander-specific tools for the 3 Inferis Spline scenes.',
   });
 
-  // Register tools
-  // console.log('Registering tools...');
-  
-  // Basic tools
+  // Core tools (code-gen based — no REST API calls)
   registerObjectTools(server);
   registerMaterialTools(server);
   registerStateEventTools(server);
   registerApiWebhookTools(server);
   registerSceneTools(server);
-  
-  // Advanced tools
   registerActionTools(server);
   registerCompleteEventTools(server);
   registerAdvancedMaterialTools(server);
   registerLightingCameraTools(server);
-  
-  // Design tools (all the advanced 3D design features including Hana)
   registerDesignTools(server);
-  
-  // Runtime tools for direct @splinetool/runtime integration
+
+  // Runtime tools — @splinetool/runtime + @splinetool/react-spline code gen
   registerRuntimeTools(server);
 
-  // Register resources
-  // console.log('Registering resources...');
+  // Inferis lander tools — 5 tools for the 3 Spline scenes
+  registerLanderTools(server);
+
+  // Resources + prompts
   registerSceneResources(server);
   registerMaterialResources(server);
   registerStateEventResources(server);
-
-  // Register prompts
-  // console.log('Registering prompts...');
   registerCreationPrompts(server);
   registerAnimationPrompts(server);
   registerRuntimePrompts(server);
 
-  // Set up the transport based on options
   const transportType = options.transport || 'stdio';
 
   if (transportType === 'http') {
-    // Set up HTTP transport
     const port = options.port || 3000;
-
-    // console.log(`Setting up HTTP transport on port ${port}...`);
-    const app = express();
+    const app  = express();
     app.use(express.json());
-    
-    // Map to store transports by session ID
+
     const transports = {};
-    
-    // Handle POST requests
+
     app.post('/mcp', async (req, res) => {
-      // Creating a new transport for each request
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => Math.random().toString(36).substring(2, 15),
-        onsessioninitialized: (sessionId) => {
-          transports[sessionId] = transport;
-        },
+        onsessioninitialized: (sessionId) => { transports[sessionId] = transport; },
       });
-      
-      // Clean up transport when closed
-      transport.onclose = () => {
-        if (transport.sessionId) {
-          delete transports[transport.sessionId];
-        }
-      };
-      
+      transport.onclose = () => { if (transport.sessionId) delete transports[transport.sessionId]; };
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     });
-    
-    // Handle GET and DELETE requests
-    const handleSessionRequest = async (req, res) => {
+
+    const handleSession = async (req, res) => {
       const sessionId = req.headers['mcp-session-id'];
       if (!sessionId || !transports[sessionId]) {
         res.status(400).send('Invalid or missing session ID');
         return;
       }
-      
-      const transport = transports[sessionId];
-      await transport.handleRequest(req, res);
+      await transports[sessionId].handleRequest(req, res);
     };
-    
-    app.get('/mcp', handleSessionRequest);
-    app.delete('/mcp', handleSessionRequest);
-    
-    // Start the HTTP server
-    app.listen(port, () => {
-      // console.log(`Streamable HTTP server listening on port ${port}`);
-    });
 
+    app.get('/mcp',    handleSession);
+    app.delete('/mcp', handleSession);
+
+    app.listen(port);
     return { server, app };
+
   } else {
-    // Default to stdio transport for Claude Desktop
-    // console.log('Setting up stdio transport for Claude Desktop...');
     const transport = new StdioServerTransport();
-
-    // Connect the server to the transport
-    // console.log('Connecting server to transport...');
     await server.connect(transport);
-
-    // console.log('Server is running and ready to process requests.');
-
     return { server, transport };
   }
 }
 
-// If this module is run directly, start the server
-const isMainModule = process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`;
+// Fix: use fileURLToPath comparison so this works regardless of how node is invoked
+const isMainModule = (() => {
+  try {
+    return (
+      process.argv[1] != null &&
+      fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+    );
+  } catch (_) {
+    return false;
+  }
+})();
+
 if (isMainModule) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error('Error starting server:', error);
     process.exit(1);
   });
 }
 
-// Export the main function for CLI and programmatic usage
 export { main };
