@@ -1,33 +1,26 @@
 // api-client.js — REWRITTEN 2026-05-09
 // Spline has NO public REST API for scene object manipulation.
-// The original called https://api.spline.design/scenes/{id}/objects|materials
-// — these endpoints do not exist. Every tool that used them returned 404/401.
-//
-// This module now provides:
-//   1. SCENE_REGISTRY — known Inferis lander file IDs + metadata
-//   2. URL helpers — prod.spline.design scene URLs
-//   3. Backward-compat stubs — return helpful code snippets instead of crashing
 
 import dotenv from 'dotenv';
 dotenv.config();
 
-// ─── Scene Registry ────────────────────────────────────────────────────────
-// Add your Spline file UUIDs here (from app.spline.design/file/{uuid})
+// ─── Scene Registry ─────────────────────────────────────────────────────────
+// Phil's remixed workspace files (app.spline.design/community/file/{uuid})
 
 export const SCENE_REGISTRY = {
-  '7bf99578-b033-4eeb-b019-33ea51e27ba1': {
+  '02fd5870-f14c-4f7b-86d1-176e7e188e8e': {
     slug: 'shadow-blur',
     name: 'Shadow & Blur — depth / hot-cool face',
     lander_phase: 'SLOP → INTENT',
     description: 'Coin-disc DNA with shadow casting and blur depth. Drives the hot-face/cool-face shader duality.',
   },
-  'fcb7291a-43a4-43b3-9e29-6bfe3451b51b': {
+  '0a38a488-99ce-4bdd-83ab-5a2d5bdb4092': {
     slug: 'granular-particle',
     name: 'Granular Texture + Particle Movement',
     lander_phase: 'INTENT → PORTAL',
     description: 'Granular noise gradient across DNA slices with particle motion. Core texture skin.',
   },
-  'f75c07a9-111d-4bdd-a39e-072b91972fc0': {
+  'b740c3f6-4f55-4433-8e4f-696f326cd16c': {
     slug: 'scroll-version',
     name: 'Scrolling Version — camera Z-push',
     lander_phase: 'PORTAL → SANCTUARY',
@@ -35,27 +28,25 @@ export const SCENE_REGISTRY = {
   },
 };
 
-// ─── URL Helpers ────────────────────────────────────────────────────────────
+// ─── URL Helpers ─────────────────────────────────────────────────────────────
 
-/** Returns the prod.spline.design scene URL for @splinetool/react-spline */
 export function getSceneUrl(fileId) {
   return `https://prod.spline.design/${fileId}/scene.splinecode`;
 }
 
-/** Returns the full scene registry */
 export function getSceneRegistry() {
   return SCENE_REGISTRY;
 }
 
-/** Find a scene entry by slug. Returns [fileId, metadata] or null. */
 export function getSceneBySlug(slug) {
   const entry = Object.entries(SCENE_REGISTRY).find(([, v]) => v.slug === slug);
   return entry ?? null;
 }
 
-/** Extract file ID from a full Spline URL (app.spline.design or prod.spline.design) */
+/** Extract file ID from any Spline URL format */
 export function parseSceneUrl(url) {
   const patterns = [
+    /app\.spline\.design\/community\/file\/([a-f0-9-]{36})/i,
     /app\.spline\.design\/file\/([a-f0-9-]{36})/i,
     /prod\.spline\.design\/([a-f0-9-]{36})/i,
   ];
@@ -66,11 +57,9 @@ export function parseSceneUrl(url) {
   return null;
 }
 
-// ─── Backward-compat stubs ──────────────────────────────────────────────────
-// Tools that previously called apiClient.getObjects() etc now receive
-// a helpful message + code snippet instead of a network crash.
+// ─── Backward-compat stubs ───────────────────────────────────────────────────
 
-const NOTE = 'Spline has no public REST API. Use @splinetool/runtime or @splinetool/react-spline for runtime interaction.';
+const NOTE = 'Spline has no public REST API. Use @splinetool/runtime or @splinetool/react-spline.';
 
 export class SplineApiClient {
   async getScene(sceneId) {
