@@ -1,93 +1,70 @@
-# Spline.design MCP Server (Archived)
+# spline-mcp-server
 
-> **This project is archived.** Spline.design does not provide a public REST API, making most of this server's functionality non-operational. See below for details.
+MCP server for [Spline.design](https://spline.design) — code generation, asset management, and Inferis lander scaffold tools.
 
-## Why archived
+> **Important:** Spline has no public REST API. This server generates code using `@splinetool/react-spline` + `@splinetool/runtime` and can download/cache `.splinecode` files. It does **not** attempt to call `api.spline.design`.
 
-This MCP server was built to programmatically control Spline.design 3D scenes through Claude. However, **Spline does not offer a public REST API** for scene manipulation. The ~130 tools that call `api.spline.design` target endpoints that don't exist and will fail with network errors.
+## Quick start
 
-Spline's actual developer tools are:
+```bash
+npm install
+node index.js          # stdio (Claude Desktop)
+node index.js --http   # HTTP on port 3000
+```
 
-- **[Code API](https://docs.spline.design/exporting-your-scene/web/code-api-for-web)** — A client-side JavaScript runtime (`@splinetool/runtime`) that only works in a browser with a canvas element. It can manipulate objects in exported scenes but cannot create scenes or objects.
-- **[Real-time API](https://docs.spline.design/interaction-states-events-and-actions/real-time-api)** — A feature inside the Spline editor for making outbound API calls from Spline to external services. Not an inbound API.
+## Claude Desktop (UNICRON)
 
-Neither of these enables the kind of server-side programmatic control this MCP server attempts.
-
-### What does work
-
-10 **code generation tools** generate `@splinetool/runtime` code for Vanilla JS, React, and Next.js. However, Claude can already write this code without an MCP server, making these tools redundant.
-
-## Installation
-
-### Using npx (for Claude Desktop)
-
-Add this to your Claude Desktop MCP config:
-
+Add to `~/.claude.json`:
 ```json
 {
   "mcpServers": {
-    "spline": {
-      "command": "npx",
-      "args": ["-y", "spline-mcp-server"]
+    "spline-design": {
+      "command": "node",
+      "args": ["/Users/unicron/spline-mcp-server/index.js"]
     }
   }
 }
 ```
 
-### Local development
+## Tools
 
-```bash
-git clone https://github.com/aydinfer/spline-mcp-server.git
-cd spline-mcp-server
-npm install
-npm start
-```
+### Inferis Lander
+| Tool | Description |
+|------|-------------|
+| `listInferisScenes` | List Phil's 3 registered Spline files with phase + embed URL |
+| `embedScene` | Generate React component for a single scene |
+| `getScrollIntegration` | Generate GSAP ScrollTrigger + Spline scroll code for a phase |
+| `getLanderScaffold` | Full composite lander: all 3 scenes + 4 scroll phases |
+| `getClaudeDesktopConfig` | Output the claude.json config for UNICRON |
 
-## What you can do with it
+### Asset Management
+| Tool | Description |
+|------|-------------|
+| `downloadScene` | Download + cache a `.splinecode` file locally |
+| `downloadAllInferisScenes` | Download all 3 lander scenes at once |
+| `listCachedScenes` | List cached files with sizes |
+| `validateScene` | Check if a cached file is valid |
+| `clearSceneCache` | Clear the local cache |
 
-Ask Claude to generate Spline runtime code for your projects:
+### Runtime Code Generation (always worked)
+| Tool | Description |
+|------|-------------|
+| `generateReactComponent` | React component with optional interactivity |
+| `generateAnimationCode` | Object animation (rotate/move/scale/color) |
+| `generateSceneInteractionCode` | Event listeners, variables, camera, physics |
+| `getRuntimeSetup` | Setup boilerplate for `@splinetool/runtime` |
 
-- "Generate a React component that loads my Spline scene and adds click handlers to objects"
-- "Write animation code that rotates an object on hover"
-- "Create an interactive scene with variable-based state management"
-- "Generate Next.js code with Spline integration"
+### Webhook Servers
+- `webhook-server.js` — receive events FROM Spline scenes
+- `simple-webhook-server.js` — minimal webhook receiver
+- `enhanced-webhook-server.js` — full webhook with logging
 
-Claude will use the code generation tools to produce working `@splinetool/runtime` code you can use directly in your web projects.
+## Inferis Lander Scene Registry
 
-## Spline Runtime API Reference
+| Slug | File ID | Phase |
+|------|---------|-------|
+| `shadow-blur` | `7bf99578-...` | SLOP → INTENT |
+| `granular-particle` | `fcb7291a-...` | INTENT → PORTAL |
+| `scroll-version` | `f75c07a9-...` | PORTAL → SANCTUARY |
 
-The `@splinetool/runtime` provides these methods (which the code generation tools target):
-
-| Method | Description |
-|---|---|
-| `findObjectByName(name)` | Find an object by name |
-| `findObjectById(uuid)` | Find an object by ID |
-| `getAllObjects()` | List all scene objects |
-| `emitEvent(event, nameOrUuid)` | Trigger an event on an object |
-| `addEventListener(event, cb)` | Listen for scene events |
-| `setVariable(name, value)` | Set a scene variable |
-| `getVariable(name)` | Get a scene variable |
-| `setZoom(value)` | Control zoom level |
-| `play()` / `stop()` | Control rendering |
-
-Objects expose `position`, `rotation`, `scale`, `visible`, and `intensity` properties.
-
-## Project Structure
-
-```
-spline-mcp-server/
-├── src/
-│   ├── tools/             # MCP tool implementations
-│   │   └── design/        # Advanced design tools (pending API)
-│   ├── utils/             # API client and runtime manager
-│   ├── prompts/           # Prompt templates
-│   ├── resources/         # MCP resources
-│   └── index.js           # Main server entry point
-├── bin/cli.js             # CLI entry point
-├── docs/                  # Documentation
-└── package.json
-```
-
-## License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+Scenes must be **published in Spline** (Share → Publish to Web) before they can be downloaded or embedded.
